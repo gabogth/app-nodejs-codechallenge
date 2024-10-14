@@ -3,14 +3,17 @@ services:
   postgres:
     image: postgres:14
     ports:
-      - "5432:5432"
+      - "5431:5432"
     environment:
       - POSTGRES_USER=postgres
       - POSTGRES_PASSWORD=postgres
+      - POSTGRES_DB=yapetransactiondb
+      
   zookeeper:
     image: confluentinc/cp-zookeeper:5.5.3
     environment:
       ZOOKEEPER_CLIENT_PORT: 2181
+
   kafka:
     image: confluentinc/cp-enterprise-kafka:5.5.3
     depends_on: [zookeeper]
@@ -23,3 +26,33 @@ services:
       KAFKA_JMX_PORT: 9991
     ports:
       - 9092:9092
+      - 29092:29092
+
+  yape_transaction_service:
+    build:
+      context: ./yape-transaction-service
+      dockerfile: Dockerfile
+    environment:
+      DATABASE_URL: "postgresql://postgres:postgres@postgres:5432/yapetransactiondb?schema=public"
+      KAFKA_BROKERS: "kafka:29092"
+      KAFKA_CLIENTID: "yape-transaction-service"
+      KAFKA_TOPIC: "antifraud_topic"
+      STAGE: "PRD"
+    depends_on: [kafka, postgres]
+    ports:
+      - 3000:3000
+
+  antifraud:
+    build:
+      context: ./anti-fraud
+      dockerfile: Dockerfile
+    environment:
+      DATABASE_URL: "postgresql://postgres:postgres@postgres:5432/yapetransactiondb?schema=public"
+      KAFKA_BROKERS: "kafka:29092"
+      KAFKA_CLIENTID: "antifraud"
+      KAFKA_TOPIC: "antifraud_topic"
+      KAFKA_GROUPID: "antifraud_groupid"
+      STAGE: "PRD"
+    depends_on: [kafka, postgres, yape_transaction_service]
+    ports:
+      - 3001:3001
